@@ -3,8 +3,8 @@
 
 // Global Variables
 bool shooting = false;
-const int flywheelThreshold = 190;
-int switched = 1;
+int flywheelSpeed = 200;
+int flywheelRange = 10;
 
 /**
  * A callback function for LLEMU's center button.
@@ -86,7 +86,7 @@ void manualShoot()
 	while (shooting)
 	{
 		// Vibrate if flywheel is at velocity
-		if (flywheel.getActualVelocity() >= flywheelThreshold)
+		if (flywheel.getActualVelocity() <= flywheelSpeed - flywheelRange || flywheel.getActualVelocity() >= flywheelSpeed + flywheelRange)
 			master.rumble(".");
 
 		// Shoot if R2 is pressed
@@ -109,14 +109,16 @@ void rapidFire()
 	for (int i = 0; i < 3; i++)
 	{
 		// Wait for flywheel to reach velocity
-		while (flywheel.getActualVelocity() >= flywheelThreshold || !shooting)
+		while (flywheel.getActualVelocity() <= flywheelSpeed - flywheelRange || flywheel.getActualVelocity() >= flywheelSpeed + flywheelRange)
 		{
-			pros::delay(10);
+			pros::delay(20);
 		}
 
 		// Shoot
 		if (shooting)
 			indexer.moveRelative(360, 200);
+		else
+			return;
 	}
 	// Stop flywheel
 	flywheel.moveVelocity(0);
@@ -126,6 +128,7 @@ void rapidFire()
 
 void opcontrol()
 {
+	int switched = 1;
 	// Set drive stopping to cost
 	drive->getModel()->setBrakeMode(AbstractMotor::brakeMode::coast);
 
@@ -149,9 +152,12 @@ void opcontrol()
 			shooting = false;
 		}
 
-		// Slow down drive if R1 is pressed
-		if (master.operator[](ControllerDigital::R1).isPressed())
+		// Slow down drive if R1 is pressed and set flywheel speed to left x axis, but center is 200
+		if (master.operator[](ControllerDigital::R1).changedToPressed())
+		{
 			drive->getModel()->setMaxVelocity(150);
+			flywheelSpeed = std::min(master.getAnalog(ControllerAnalog::leftX) + 200, 400.0f);
+		}
 		else if (master.operator[](ControllerDigital::R1).changedToReleased())
 			drive->getModel()->setMaxVelocity(200);
 	}

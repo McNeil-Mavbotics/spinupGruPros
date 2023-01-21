@@ -6,6 +6,8 @@ Controller master;
 // Motors
 Motor indexer(1, false, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::degrees);
 Motor flywheel(2, true, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::degrees);
+Motor intake(3, false, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::degrees);
+Motor expansion(4, false, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::degrees);
 
 // Drivetrain Motors
 Motor left_front_mtr(3);

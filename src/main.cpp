@@ -32,6 +32,8 @@ void initialize()
 
 	indexer.moveRelative(150, 200);
 	flywheel.setBrakeMode(AbstractMotor::brakeMode::coast);
+	// Set drive stopping to hold
+	drive->getModel()->setBrakeMode(AbstractMotor::brakeMode::hold);
 }
 
 /**
@@ -81,6 +83,8 @@ void autonomous() {}
 
 void manualShoot()
 {
+	shooting = true;
+
 	// Start flywheel
 	flywheel.moveVelocity(200);
 	while (shooting)
@@ -96,6 +100,8 @@ void manualShoot()
 
 	// Stop flywheel
 	flywheel.moveVelocity(0);
+
+	shooting = false;
 }
 
 void rapidFire()
@@ -120,6 +126,7 @@ void rapidFire()
 		else
 			return;
 	}
+
 	// Stop flywheel
 	flywheel.moveVelocity(0);
 
@@ -129,8 +136,6 @@ void rapidFire()
 void opcontrol()
 {
 	int switched = 1;
-	// Set drive stopping to cost
-	drive->getModel()->setBrakeMode(AbstractMotor::brakeMode::coast);
 
 	while (true)
 	{
@@ -141,9 +146,21 @@ void opcontrol()
 		// Drive
 		drive->getModel()->arcade(master.getAnalog(ControllerAnalog::leftY) * switched, master.getAnalog(ControllerAnalog::rightX), (0.01));
 
+		// Start intake
+		if (master.operator[](ControllerDigital::L1).isPressed())
+			intake.moveVelocity(200);
+		else if (master.operator[](ControllerDigital::R1).isPressed())
+			intake.moveVelocity(-200);
+		else if (master.operator[](ControllerDigital::L1).changedToReleased() || master.operator[](ControllerDigital::R1).changedToReleased())
+			intake.moveVelocity(0);
+
 		// Rapid Fire if Y is pressed
 		if (master.operator[](ControllerDigital::Y).changedToReleased())
 			rapidFire();
+
+		// Manually Shoot
+		if (master.operator[](ControllerDigital::X).changedToReleased())
+			manualShoot();
 
 		// Cancel shooting if left is pressed
 		if (master.operator[](ControllerDigital::left).changedToReleased())
@@ -152,13 +169,20 @@ void opcontrol()
 			shooting = false;
 		}
 
-		// Slow down drive if R1 is pressed and set flywheel speed to left x axis, but center is 200
+		// R1 Shift Controls
 		if (master.operator[](ControllerDigital::R1).changedToPressed())
 		{
+			// Slow down drive
 			drive->getModel()->setMaxVelocity(150);
+			// Set flywheel speed
 			flywheelSpeed = std::min(master.getAnalog(ControllerAnalog::leftX) + 200, 400.0f);
+			// Expansion
+			if (master.operator[](ControllerDigital::A).isPressed())
+				expansion.moveRelative(360, 200);
 		}
 		else if (master.operator[](ControllerDigital::R1).changedToReleased())
 			drive->getModel()->setMaxVelocity(200);
+
+		pros::delay(20);
 	}
 }

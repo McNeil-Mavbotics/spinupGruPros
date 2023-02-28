@@ -1,39 +1,41 @@
 #include "main.h"
+#include "controls.h"
 #include "ports.h"
 
 // Global Variables
 bool shooting = false;
-int flywheelSpeed = 200;
+const int defaultFlywheelSpeed = 360;
+int flywheelSpeed = defaultFlywheelSpeed;
 int flywheelRange = 10;
+int autoMode = 0;
+bool shifted = false;
 
-/**
- * A callback function for LLEMU's center button.
- *
- * When this callback is fired, it will toggle line 2 of the LCD text between
- * "I was pressed!" and nothing.
- */
-void on_center_button()
+void on_left_button()
 {
-	// TODO: Print debug stats
+	autoMode = -1;
+	pros::lcd::set_text(1, "Left");
 }
 
-/**
- * Runs initialization code. This occurs as soon as the program is started.
- *
- * All other competition modes are blocked by initialize; it is recommended
- * to keep execution time for this mode under a few seconds.
- */
+void on_right_button()
+{
+	autoMode = 1;
+	pros::lcd::set_text(1, "Right");
+}
+
 void initialize()
 {
 	pros::lcd::initialize();
-	pros::lcd::set_text(1, "Ready to shred!");
 
-	pros::lcd::register_btn1_cb(on_center_button);
+	pros::lcd::register_btn0_cb(on_left_button);
+	pros::lcd::register_btn2_cb(on_right_button);
 
 	indexer.moveRelative(150, 200);
+	left_front_mtr.setBrakeMode(AbstractMotor::brakeMode::coast);
+	right_front_mtr.setBrakeMode(AbstractMotor::brakeMode::coast);
 	flywheel.setBrakeMode(AbstractMotor::brakeMode::coast);
-	// Set drive stopping to hold
-	drive->getModel()->setBrakeMode(AbstractMotor::brakeMode::hold);
+	drive->setMaxVelocity(150);
+	// Set drive stopping to coast
+	drive->getModel()->setBrakeMode(AbstractMotor::brakeMode::coast);
 }
 
 /**
@@ -65,7 +67,29 @@ void competition_initialize() {}
  * will be stopped. Re-enabling the robot will restart the task, not re-start it
  * from where it left off.
  */
-void autonomous() {}
+
+void autonomousLeft()
+{
+}
+
+void autonomousRight()
+{
+}
+
+void autonomous()
+{
+	switch (autoMode)
+	{
+	case -1:
+		autonomousLeft();
+		break;
+	case 1:
+		autonomousRight();
+		break;
+	default:
+		break;
+	}
+}
 
 /**
  * Runs the operator control code. This function will be started in its own task
@@ -86,15 +110,15 @@ void manualShoot()
 	shooting = true;
 
 	// Start flywheel
-	flywheel.moveVelocity(200);
+	flywheel.moveVelocity(flywheelSpeed);
 	while (shooting)
 	{
 		// Vibrate if flywheel is at velocity
-		if (flywheel.getActualVelocity() <= flywheelSpeed - flywheelRange || flywheel.getActualVelocity() >= flywheelSpeed + flywheelRange)
+		if (flywheel.getActualVelocity() >= flywheelSpeed - flywheelRange && flywheel.getActualVelocity() <= flywheelSpeed + flywheelRange)
 			master.rumble(".");
 
-		// Shoot if R2 is pressed
-		if (master.operator[](ControllerDigital::R2).changedToReleased())
+		// Shoot if L2 is pressed
+		if (master.operator[](fireBtn).changedToReleased())
 			indexer.moveRelative(360, 200);
 	}
 
@@ -109,7 +133,7 @@ void rapidFire()
 	shooting = true;
 
 	// Start flywheel
-	flywheel.moveVelocity(200);
+	flywheel.moveVelocity(flywheelSpeed);
 
 	// Shoot 3 times
 	for (int i = 0; i < 3; i++)
@@ -139,49 +163,56 @@ void opcontrol()
 
 	while (true)
 	{
-		// Switch direction of drive if B is pressed
-		if (master.operator[](ControllerDigital::B).changedToReleased())
+		// Switch direction of drive
+		if (master.operator[](switchDriveBtn).changedToReleased())
 			switched *= -1;
 
 		// Drive
-		drive->getModel()->arcade(master.getAnalog(ControllerAnalog::leftY) * switched, master.getAnalog(ControllerAnalog::rightX), (0.01));
+		if (shifted)
+			drive->getModel()->arcade(master.getAnalog(ControllerAnalog::leftY) * switched, master.getAnalog(ControllerAnalog::rightX), 0);
+		else
+			drive->getModel()->curvature(master.getAnalog(ControllerAnalog::leftY) * switched, master.getAnalog(ControllerAnalog::rightX), 0.01);
 
 		// Start intake
-		if (master.operator[](ControllerDigital::L1).isPressed())
-			intake.moveVelocity(200);
-		else if (master.operator[](ControllerDigital::R1).isPressed())
-			intake.moveVelocity(-200);
-		else if (master.operator[](ControllerDigital::L1).changedToReleased() || master.operator[](ControllerDigital::R1).changedToReleased())
+		if (master.operator[](intakeBtn).isPressed())
+			intake.moveVelocity(175);
+		else if (master.operator[](reverseIntakeBtn).isPressed())
+			intake.moveVelocity(-175);
+		else
 			intake.moveVelocity(0);
 
-		// Rapid Fire if Y is pressed
-		if (master.operator[](ControllerDigital::Y).changedToReleased())
-			rapidFire();
+		// Rapid Fire
+		if (master.operator[](rapidFireBtn).changedToReleased() && !shooting)
+			pros::Task rapid(rapidFire);
 
 		// Manually Shoot
-		if (master.operator[](ControllerDigital::X).changedToReleased())
-			manualShoot();
+		if (master.operator[](manualShootBtn).changedToReleased() && !shooting)
+			pros::Task manual(manualShoot);
 
-		// Cancel shooting if left is pressed
-		if (master.operator[](ControllerDigital::left).changedToReleased())
+		// Cancel shooting
+		if (master.operator[](cancelShootingBtn).changedToReleased())
 		{
 			flywheel.moveVelocity(0);
 			shooting = false;
 		}
 
-		// R1 Shift Controls
-		if (master.operator[](ControllerDigital::R1).changedToPressed())
+		// Shift Controls
+		if (master.operator[](shiftBtn).changedToPressed())
 		{
+			shifted = true;
 			// Slow down drive
-			drive->getModel()->setMaxVelocity(150);
-			// Set flywheel speed
-			flywheelSpeed = std::min(master.getAnalog(ControllerAnalog::leftX) + 200, 400.0f);
+			drive->getModel()->setMaxVelocity(30 / 100 * 200);
+			drive->getModel()->setBrakeMode(AbstractMotor::brakeMode::hold);
 			// Expansion
-			if (master.operator[](ControllerDigital::A).isPressed())
+			if (master.operator[](expansionBtn).isPressed())
 				expansion.moveRelative(360, 200);
 		}
-		else if (master.operator[](ControllerDigital::R1).changedToReleased())
-			drive->getModel()->setMaxVelocity(200);
+		else if (master.operator[](shiftBtn).changedToReleased())
+		{
+			shifted = false;
+			drive->getModel()->setMaxVelocity(60 / 100 * 200);
+			drive->getModel()->setBrakeMode(AbstractMotor::brakeMode::coast);
+		}
 
 		pros::delay(20);
 	}

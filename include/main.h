@@ -80,3 +80,19 @@ extern "C"
 #endif
 
 #endif // _PROS_MAIN_H_
+
+// Functions
+bool atSpeed(int previousSpeed);
+void startFlywheel();
+void indexIndexer();
+void rapidFire();
+void leftAuton();
+void rightAuton();
+void initialize();
+void disabled();
+void competition_initialize();
+void autonomousLeft();
+void autonomousRight();
+void autonomous();
+void manualShoot();
+void opcontrol();

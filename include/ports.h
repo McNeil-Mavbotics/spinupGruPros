@@ -4,16 +4,16 @@
 Controller master;
 
 // Motors
-Motor indexer(1, true, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::degrees);
-Motor flywheel(2, true, AbstractMotor::gearset::blue, AbstractMotor::encoderUnits::degrees);
-Motor intake(4, false, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::degrees);
+Motor indexer(10, true, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::degrees);
+Motor flywheel(15, true, AbstractMotor::gearset::blue, AbstractMotor::encoderUnits::degrees);
+Motor intake(1, false, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::degrees);
 Motor expansion(9, false, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::degrees);
 
 // Drivetrain Motors
-Motor left_front_mtr(5, true, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::degrees);
-Motor right_front_mtr(8, false, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::degrees);
-Motor left_back_mtr(3, false, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::degrees);
-Motor right_back_mtr(10, true, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::degrees);
+Motor left_front_mtr(20, false, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::degrees);
+Motor right_front_mtr(11, true, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::degrees);
+Motor left_back_mtr(19, false, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::degrees);
+Motor right_back_mtr(6, true, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::degrees);
 
 // Drivetrain
 std::shared_ptr<ChassisController> drive =

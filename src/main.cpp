@@ -4,23 +4,23 @@
 
 // Global Variables
 bool shooting = false;
-const int defaultFlywheelSpeed = 450;
-int flywheelSpeed = defaultFlywheelSpeed;
+const int defaultFlywheelSpeedDesired = 450;
+const int defaultFlywheelSpeedActual = 390;
+const int thirdDiskReduction = 0;
 int flywheelRange = 10;
 const int intakeSpeed = 200;
 const int expansionSpeed = 200;
 bool expanding = false;
 int autoMode = 0;
-bool shifted = false;
 
 void startFlywheel()
 {
-	flywheel.moveVoltage(-12000 * flywheelSpeed / 600);
+	flywheel.moveVoltage(-12000 * defaultFlywheelSpeedDesired / 600);
 }
 
 void indexIndexer()
 {
-	int distance = 30;
+	int distance = 10;
 	int initialPos = indexer.getPosition();
 	indexer.moveVelocity(100);
 	while (indexer.getPosition() - initialPos < distance)
@@ -28,7 +28,7 @@ void indexIndexer()
 	indexer.moveVelocity(-200);
 	while (indexer.getPosition() > initialPos)
 		pros::delay(20);
-	indexer.moveVelocity(-10);
+	indexer.moveVelocity(0);
 }
 
 void leftAuton()
@@ -49,45 +49,19 @@ void initialize()
 
 	pros::lcd::register_btn0_cb(leftAuton);
 	pros::lcd::register_btn2_cb(rightAuton);
-
-	indexer.moveVelocity(-10);
 	left_front_mtr.setBrakeMode(AbstractMotor::brakeMode::coast);
 	right_front_mtr.setBrakeMode(AbstractMotor::brakeMode::coast);
+	left_back_mtr.setBrakeMode(AbstractMotor::brakeMode::coast);
+	right_back_mtr.setBrakeMode(AbstractMotor::brakeMode::coast);
 	flywheel.setBrakeMode(AbstractMotor::brakeMode::coast);
 	drive->setMaxVelocity(150);
 	// Set drive stopping to coast
 	drive->getModel()->setBrakeMode(AbstractMotor::brakeMode::coast);
 }
 
-/**
- * Runs while the robot is in the disabled state of Field Management System or
- * the VEX Competition Switch, following either autonomous or opcontrol. When
- * the robot is enabled, this task will exit.
- */
 void disabled() {}
 
-/**
- * Runs after initialize(), and before autonomous when connected to the Field
- * Management System or the VEX Competition Switch. This is intended for
- * competition-specific initialization routines, such as an autonomous selector
- * on the LCD.
- *
- * This task will exit when the robot is enabled and autonomous or opcontrol
- * starts.
- */
 void competition_initialize() {}
-
-/**
- * Runs the user autonomous code. This function will be started in its own task
- * with the default priority and stack size whenever the robot is enabled via
- * the Field Management System or the VEX Competition Switch in the autonomous
- * mode. Alternatively, this function may be called in initialize or opcontrol
- * for non-competition testing purposes.
- *
- * If the robot is disabled or communications is lost, the autonomous task
- * will be stopped. Re-enabling the robot will restart the task, not re-start it
- * from where it left off.
- */
 
 void autonomousLeft()
 {
@@ -102,11 +76,12 @@ void autonomousRight()
 	trapezoidProfile.get()
 		->setTarget("A");
 	rapidFire();
+	intake.moveVelocity(0);
 }
 
 void autonomous()
 {
-	while (autoMode == 0)
+	do
 	{
 		switch (autoMode)
 		{
@@ -120,48 +95,7 @@ void autonomous()
 			break;
 		}
 		pros::delay(20);
-	}
-}
-
-/**
- * Runs the operator control code. This function will be started in its own task
- * with the default priority and stack size whenever the robot is enabled via
- * the Field Management System or the VEX Competition Switch in the operator
- * control mode.
- *
- * If no competition control is connected, this function will run immediately
- * following initialize().
- *
- * If the robot is disabled or communications is lost, the
- * operator control task will be stopped. Re-enabling the robot will restart the
- * task, not resume it from where it left off.
- */
-
-void manualShoot()
-{
-	shooting = true;
-
-	int previousSpeed = 0;
-
-	// Start flywheel
-	startFlywheel();
-	while (shooting)
-	{
-		// Vibrate if flywheel is at velocity
-		if (flywheel.getActualVelocity() >= flywheelSpeed - flywheelRange && flywheel.getActualVelocity() <= flywheelSpeed + flywheelRange && previousSpeed >= flywheelSpeed - flywheelRange && previousSpeed <= flywheelSpeed + flywheelRange)
-			master.rumble(".");
-
-		// Shoot if L2 is pressed
-		if (master.operator[](fireBtn).changedToReleased())
-			indexIndexer();
-
-		previousSpeed = flywheel.getActualVelocity();
-	}
-
-	// Stop flywheel
-	flywheel.moveVoltage(0);
-
-	shooting = false;
+	} while (autoMode == 0);
 }
 
 void rapidFire()
@@ -171,17 +105,12 @@ void rapidFire()
 	// Start flywheel
 	startFlywheel();
 
-	int previousSpeed = 0;
+	pros::delay(2000);
 
 	// Shoot 3 times
 	for (int i = 0; i < 3; i++)
 	{
-		// Wait for flywheel to reach velocity
-		while (!(flywheel.getActualVelocity() >= flywheelSpeed - flywheelRange && flywheel.getActualVelocity() <= flywheelSpeed + flywheelRange && previousSpeed >= flywheelSpeed - flywheelRange && previousSpeed <= flywheelSpeed + flywheelRange))
-		{
-			previousSpeed = flywheel.getActualVelocity();
-			pros::delay(20);
-		}
+		pros::delay(1000);
 
 		// Shoot
 		if (shooting)
@@ -196,21 +125,35 @@ void rapidFire()
 	shooting = false;
 }
 
+void manualShoot()
+{
+	shooting = true;
+
+	// Start flywheel
+	startFlywheel();
+	while (shooting)
+		// Shoot if L2 is pressed
+		if (master.operator[](fireBtn).changedToReleased())
+			indexIndexer();
+
+	// Stop flywheel
+	flywheel.moveVoltage(0);
+
+	shooting = false;
+}
+
 void opcontrol()
 {
-	int switched = 1;
-
 	while (true)
 	{
-		// Switch direction of drive
-		if (master.operator[](switchDriveBtn).changedToReleased())
-			switched *= -1;
-
 		// Drive
-		if (shifted)
-			drive->getModel()->arcade(master.getAnalog(ControllerAnalog::leftY) * switched, master.getAnalog(ControllerAnalog::rightX), 0);
-		else
-			drive->getModel()->curvature(master.getAnalog(ControllerAnalog::leftY) * switched, master.getAnalog(ControllerAnalog::rightX), 0.01);
+		drive->getModel()->arcade(master.getAnalog(ControllerAnalog::leftY), master.getAnalog(ControllerAnalog::rightX), 0.01);
+
+		// Indexer Retreat
+		if (master.operator[](indexRetreatBtn).isPressed())
+			indexer.moveVelocity(-100);
+		else if (!shooting)
+			indexer.moveVelocity(0);
 
 		// Start intake
 		if (master.operator[](intakeBtn).isPressed())
@@ -238,7 +181,6 @@ void opcontrol()
 		// Shift Controls
 		if (master.operator[](shiftBtn).changedToPressed())
 		{
-			shifted = true;
 			// Slow down drive
 			drive->getModel()->setMaxVelocity(30 / 100 * 200);
 			drive->getModel()->setBrakeMode(AbstractMotor::brakeMode::hold);
@@ -248,12 +190,11 @@ void opcontrol()
 		}
 		else if (master.operator[](shiftBtn).changedToReleased())
 		{
-			shifted = false;
 			drive->getModel()->setMaxVelocity(60 / 100 * 200);
 			drive->getModel()->setBrakeMode(AbstractMotor::brakeMode::coast);
 		}
 
-		pros::lcd::print(1, "Flywheel: %f", flywheel.getActualVelocity());
+		master.setText(1, 1, std::to_string(flywheel.getActualVelocity()));
 
 		pros::delay(20);
 	}

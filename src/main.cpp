@@ -4,32 +4,53 @@
 
 // Global Variables
 bool shooting = false;
-const int defaultFlywheelSpeed = 360;
+const int defaultFlywheelSpeed = 450;
 int flywheelSpeed = defaultFlywheelSpeed;
 int flywheelRange = 10;
+const int intakeSpeed = 200;
+const int expansionSpeed = 200;
+bool expanding = false;
 int autoMode = 0;
 bool shifted = false;
 
-void on_left_button()
+void startFlywheel()
 {
-	autoMode = -1;
-	pros::lcd::set_text(1, "Left");
+	flywheel.moveVoltage(-12000 * flywheelSpeed / 600);
 }
 
-void on_right_button()
+void indexIndexer()
+{
+	int distance = 30;
+	int initialPos = indexer.getPosition();
+	indexer.moveVelocity(100);
+	while (indexer.getPosition() - initialPos < distance)
+		pros::delay(20);
+	indexer.moveVelocity(-200);
+	while (indexer.getPosition() > initialPos)
+		pros::delay(20);
+	indexer.moveVelocity(-10);
+}
+
+void leftAuton()
+{
+	autoMode = -1;
+	pros::lcd::set_text(0, "Left");
+}
+
+void rightAuton()
 {
 	autoMode = 1;
-	pros::lcd::set_text(1, "Right");
+	pros::lcd::set_text(0, "Right");
 }
 
 void initialize()
 {
 	pros::lcd::initialize();
 
-	pros::lcd::register_btn0_cb(on_left_button);
-	pros::lcd::register_btn2_cb(on_right_button);
+	pros::lcd::register_btn0_cb(leftAuton);
+	pros::lcd::register_btn2_cb(rightAuton);
 
-	indexer.moveRelative(150, 200);
+	indexer.moveVelocity(-10);
 	left_front_mtr.setBrakeMode(AbstractMotor::brakeMode::coast);
 	right_front_mtr.setBrakeMode(AbstractMotor::brakeMode::coast);
 	flywheel.setBrakeMode(AbstractMotor::brakeMode::coast);
@@ -74,20 +95,31 @@ void autonomousLeft()
 
 void autonomousRight()
 {
+	intake.moveVelocity(intakeSpeed);
+	std::initializer_list<PathfinderPoint> points = {PathfinderPoint{0_ft, 0.5_ft, 0_deg}, PathfinderPoint{0_ft, 1.5_ft, -90_deg}};
+	trapezoidProfile.get()
+		->generatePath(points, "A");
+	trapezoidProfile.get()
+		->setTarget("A");
+	rapidFire();
 }
 
 void autonomous()
 {
-	switch (autoMode)
+	while (autoMode == 0)
 	{
-	case -1:
-		autonomousLeft();
-		break;
-	case 1:
-		autonomousRight();
-		break;
-	default:
-		break;
+		switch (autoMode)
+		{
+		case -1:
+			autonomousLeft();
+			break;
+		case 1:
+			autonomousRight();
+			break;
+		default:
+			break;
+		}
+		pros::delay(20);
 	}
 }
 
@@ -109,21 +141,25 @@ void manualShoot()
 {
 	shooting = true;
 
+	int previousSpeed = 0;
+
 	// Start flywheel
-	flywheel.moveVelocity(flywheelSpeed);
+	startFlywheel();
 	while (shooting)
 	{
 		// Vibrate if flywheel is at velocity
-		if (flywheel.getActualVelocity() >= flywheelSpeed - flywheelRange && flywheel.getActualVelocity() <= flywheelSpeed + flywheelRange)
+		if (flywheel.getActualVelocity() >= flywheelSpeed - flywheelRange && flywheel.getActualVelocity() <= flywheelSpeed + flywheelRange && previousSpeed >= flywheelSpeed - flywheelRange && previousSpeed <= flywheelSpeed + flywheelRange)
 			master.rumble(".");
 
 		// Shoot if L2 is pressed
 		if (master.operator[](fireBtn).changedToReleased())
-			indexer.moveRelative(360, 200);
+			indexIndexer();
+
+		previousSpeed = flywheel.getActualVelocity();
 	}
 
 	// Stop flywheel
-	flywheel.moveVelocity(0);
+	flywheel.moveVoltage(0);
 
 	shooting = false;
 }
@@ -133,26 +169,29 @@ void rapidFire()
 	shooting = true;
 
 	// Start flywheel
-	flywheel.moveVelocity(flywheelSpeed);
+	startFlywheel();
+
+	int previousSpeed = 0;
 
 	// Shoot 3 times
 	for (int i = 0; i < 3; i++)
 	{
 		// Wait for flywheel to reach velocity
-		while (flywheel.getActualVelocity() <= flywheelSpeed - flywheelRange || flywheel.getActualVelocity() >= flywheelSpeed + flywheelRange)
+		while (!(flywheel.getActualVelocity() >= flywheelSpeed - flywheelRange && flywheel.getActualVelocity() <= flywheelSpeed + flywheelRange && previousSpeed >= flywheelSpeed - flywheelRange && previousSpeed <= flywheelSpeed + flywheelRange))
 		{
+			previousSpeed = flywheel.getActualVelocity();
 			pros::delay(20);
 		}
 
 		// Shoot
 		if (shooting)
-			indexer.moveRelative(360, 200);
+			indexIndexer();
 		else
 			return;
 	}
 
 	// Stop flywheel
-	flywheel.moveVelocity(0);
+	flywheel.moveVoltage(0);
 
 	shooting = false;
 }
@@ -175,9 +214,9 @@ void opcontrol()
 
 		// Start intake
 		if (master.operator[](intakeBtn).isPressed())
-			intake.moveVelocity(175);
+			intake.moveVelocity(intakeSpeed);
 		else if (master.operator[](reverseIntakeBtn).isPressed())
-			intake.moveVelocity(-175);
+			intake.moveVelocity(-intakeSpeed);
 		else
 			intake.moveVelocity(0);
 
@@ -192,7 +231,7 @@ void opcontrol()
 		// Cancel shooting
 		if (master.operator[](cancelShootingBtn).changedToReleased())
 		{
-			flywheel.moveVelocity(0);
+			flywheel.moveVoltage(0);
 			shooting = false;
 		}
 
@@ -205,7 +244,7 @@ void opcontrol()
 			drive->getModel()->setBrakeMode(AbstractMotor::brakeMode::hold);
 			// Expansion
 			if (master.operator[](expansionBtn).isPressed())
-				expansion.moveRelative(360, 200);
+				expansion.moveVelocity(expanding ? 0 : expansionSpeed);
 		}
 		else if (master.operator[](shiftBtn).changedToReleased())
 		{
@@ -213,6 +252,8 @@ void opcontrol()
 			drive->getModel()->setMaxVelocity(60 / 100 * 200);
 			drive->getModel()->setBrakeMode(AbstractMotor::brakeMode::coast);
 		}
+
+		pros::lcd::print(1, "Flywheel: %f", flywheel.getActualVelocity());
 
 		pros::delay(20);
 	}

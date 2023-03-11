@@ -4,7 +4,7 @@
 Controller master;
 
 // Motors
-Motor indexer(1, false, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::degrees);
+Motor indexer(1, true, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::degrees);
 Motor flywheel(2, true, AbstractMotor::gearset::blue, AbstractMotor::encoderUnits::degrees);
 Motor intake(4, false, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::degrees);
 Motor expansion(9, false, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::degrees);
